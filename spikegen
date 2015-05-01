@@ -45,7 +45,7 @@ def independent_trains(args):
         T[i] = random_spike_train(maxtime, dt, freq)
 
     # apply predefined correlation
-    if not (xmethod == 'none'):
+    if not (xmethod == 'none') and xls is not None:
         for xl in xls:
             for i in range(1, len(xl)):
                 if xmethod == 'exact':
@@ -54,7 +54,7 @@ def independent_trains(args):
                 elif xmethod == 'fuzzy':
                     # add a fuzzy value, always additional, with around 5
                     # millisecond delays drawn from a normal distributed
-                    dt = np.abs(np.random.normal(len(T[xl[0]]), 5.0))
+                    dt = np.abs(np.random.normal(len(T[xl[0]]), args.jitter))
                     dt = np.round(dt)
                     T[xl[i]] = dt + T[xl[0]]
                 else:
@@ -81,10 +81,6 @@ def independent_trains(args):
         f.write("%d, %d, %d\n" % (x[0], x[1], x[2]))
 
     f.close()
-
-    if args.visualize:
-        rasterplot(S)
-        plt.show()
 
 
 def attractor_bump(args):
@@ -152,10 +148,14 @@ def parse_args():
             type=float,
             help="delta-t for time integration. usually you can ignore this setting.",
             default=0.001)
-    parser.add_argument('--visualize', 
-            help="visualize the results. Warning: this may take a lot of time!", 
-            action="store_true",
-            default=False)
+    #parser.add_argument('--visualize', 
+    #        help="visualize the results. Warning: this may take a lot of time!", 
+    #        action="store_true",
+    #        default=False)
+    parser.add_argument('--jitter',
+            type=float,
+            help="time delta for jitter that is applied for the fuzzy generation method in ms.",
+            default=5.0);
 
     # parsing and sanity check
     args = parser.parse_args()
