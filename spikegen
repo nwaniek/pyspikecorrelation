@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+
+import sys
+import numpy as np
+import matplotlib.pyplot as plt
+import argparse
+from operator import itemgetter
+
+from spikeutil import *
+from plotutil import *
+
+
+def independent_trains(args):
+    """Method to generate poisson spike trains from independent poisson
+    processes."""
+
+    # method to correlate spike trains
+    xmethod = args.M
+
+    # correlation lists
+    xls = args.X
+
+    # seed to get reproducible results
+    np.random.seed(1337)
+
+    # number of traces
+    N = args.N
+
+    # delta-t in ms
+    dt = args.dt
+
+    # standard frequency for spiking neurons in Hz
+    freq = args.freq
+
+    # maximal time for the traces in s
+    maxtime = args.T
+
+    # data storage
+    tmax = np.ceil(maxtime / dt)
+
+    # storage for spiketrace and spiketimes
+    T = [list() for i in range(N)]
+
+    for i in range(N):
+        T[i] = random_spike_train(maxtime, dt, freq)
+
+    # apply predefined correlation
+    if not (xmethod == 'none'):
+        for xl in xls:
+            for i in range(1, len(xl)):
+                if xmethod == 'exact':
+                    # define correlation method
+                    T[xl[i]] = T[xl[0]]
+                elif xmethod == 'fuzzy':
+                    # add a fuzzy value, always additional, with around 5
+                    # millisecond delays drawn from a normal distributed
+                    dt = np.abs(np.random.normal(len(T[xl[0]]), 5.0))
+                    dt = np.round(dt)
+                    T[xl[i]] = dt + T[xl[0]]
+                else:
+                    print("Error: unknown correlation method %s" % (xmethod))
+                    sys.exit(-1)
+
+    # compute deltas of spike times, and get a list of IDs with the same length
+    # as the individual spike lists
+    dts = [np.insert(np.diff(t),0,t[0]) for t in T]
+    ids = [[i] * len(t) for i,t in enumerate(T)]
+
+    # zip the lists into one mega-list
+    X = []
+    for i in range(N):
+        Z = zip(ids[i], dts[i].tolist(), T[i])
+        X.extend(list(Z))
+
+    # sort the list by spike timne
+    X = sorted(X, key=itemgetter(2))
+
+    # write to file
+    f = open(args.filename, 'w')
+    for x in X:
+        f.write("%d, %d, %d\n" % (x[0], x[1], x[2]))
+
+    f.close()
+
+    if args.visualize:
+        rasterplot(S)
+        plt.show()
+
+
+def attractor_bump(args):
+    """Activity of a neural network which has an attractor bump at a specific
+    location."""
+
+    v = np.deg2rad(0)
+
+    # setup (integral delta-t, number of neurons, simulation duration)
+    dt = args.dt
+    N = args.N
+    maxtime = args.T
+    freq = args.freq
+
+    # preallocate memory
+    maxiter = int(maxtime / dt)
+    ts = np.zeros((N))
+
+    f = open(args.filename, 'w')
+
+    # iterate over time
+    for t in range(maxiter):
+        # get the rates of all neurons
+        R = gen_homogeneous_response(v, vrange=[-np.pi, np.pi], N=N)
+        spikes = rate_to_poisson(R, dt, freq)
+        for i in range(N):
+            if spikes[i]:
+                f.write('%d, %d, %d\n' % (i, t - ts[i], t))
+                ts[i] = t
+
+    f.close()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate (possibly) correlated poission spike trains")
+    parser.add_argument('N',
+            type=int,
+            help="Number of neurons to simulate",
+            default=25)
+    parser.add_argument('T',
+            type=int,
+            help="Time in seconds to simulate",
+            default=60)
+    parser.add_argument('M',
+            type=str,
+            help="Correlation method. One of none, exact, fuzzy",
+            default="none") 
+    parser.add_argument('freq',
+            type=float,
+            help="Frequency of spiking neurons.",
+            default=65.0) 
+    parser.add_argument('datamodel',
+            type=str,
+            help="Data generation model. One of independent, attractor",
+            default="independent")
+    parser.add_argument('filename',
+            type=str,
+            help="Filename for storing results.")
+    parser.add_argument('-X',
+            type=int,
+            help="List of correlated neurons. You can generate multiple lists.",
+            nargs='+',
+            action='append')
+    parser.add_argument('-dt',
+            type=float,
+            help="delta-t for time integration. usually you can ignore this setting.",
+            default=0.001)
+    parser.add_argument('--visualize', 
+            help="visualize the results. Warning: this may take a lot of time!", 
+            action="store_true",
+            default=False)
+
+    # parsing and sanity check
+    args = parser.parse_args()
+    if not (args.M in ['none', 'exact', 'fuzzy']):
+        print("Error: correlation method needs to be one of none, exact, fuzzy")
+        sys.exit(-1)
+    if not (args.datamodel in ['independent', 'attractor']):
+        print("Error: data generation method needs to be one of independent, attractor")
+        sys.exit(-1)
+
+    return args
+
+
+def main():
+    args = parse_args()
+    if args.datamodel == 'independent':
+        independent_trains(args)
+    elif args.datamodel == 'attractor':
+        attractor_bump(args)
+
+
+if __name__ == "__main__":
+    main()
