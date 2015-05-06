@@ -50,11 +50,11 @@ def independent_trains(args):
             for i in range(1, len(xl)):
                 if xmethod == 'exact':
                     # define correlation method
-                    T[xl[i]] = T[xl[0]]
+                    T[xl[i]] = [t + i * args.offset for t in T[xl[0]]]
                 elif xmethod == 'fuzzy':
                     # add a fuzzy value, always additional, with around 5
                     # millisecond delays drawn from a normal distributed
-                    dt = np.abs(np.random.normal(len(T[xl[0]]), args.jitter))
+                    dt = np.abs(np.random.normal(len(T[xl[0]]), args.offset))
                     dt = np.round(dt)
                     T[xl[i]] = dt + T[xl[0]]
                 else:
@@ -75,10 +75,13 @@ def independent_trains(args):
     # sort the list by spike timne
     X = sorted(X, key=itemgetter(2))
 
-    # write to file
+    # write to file. drop all events that occur at exactly the same time!
+    t = -1
     f = open(args.filename, 'w')
     for x in X:
-        f.write("%d, %d, %d\n" % (x[0], x[1], x[2]))
+        if not x[2] == t:
+            f.write("%d, %d, %d\n" % (x[0], x[1], x[2]))
+        t = x[2]
 
     f.close()
 
@@ -152,9 +155,9 @@ def parse_args():
     #        help="visualize the results. Warning: this may take a lot of time!", 
     #        action="store_true",
     #        default=False)
-    parser.add_argument('--jitter',
+    parser.add_argument('--offset',
             type=float,
-            help="time delta for jitter that is applied for the fuzzy generation method in ms.",
+            help="time delta between correlated spike trains.",
             default=5.0);
 
     # parsing and sanity check
